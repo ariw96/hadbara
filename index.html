@@ -122,7 +122,7 @@ async function loadCrop(crop){
   // ניקוי כפילויות זהות
   const seen=new Set(), rows=[];
   for(const x of out){
-    const key=[x['שם תכשיר'],x['נגע'],x['מינון ליישום'],x['נפח ליישום'],x['תקופת המתנה'],x['שלב גידול'],x['הערה גידול']].map(clean).join('|');
+    const key=FIELDS.map(f=>clean(x[f])).join('|');   // רק שורות זהות לגמרי מאוחדות
     if(seen.has(key)) continue; seen.add(key);
     x._cat = catOf(clean(x['סוג פעילות']));
     rows.push(x);
@@ -251,7 +251,7 @@ function renderResults(){
       h+='<div class="grid">'
         +kv('מינון',r['מינון ליישום'])
         +kv('נפח',r['נפח ליישום'])
-        +kv('ימי המתנה',clean(r['תקופת המתנה'])?clean(r['תקופת המתנה'])+' ימים':'','phi')
+        +kv('ימי המתנה',clean(r['תקופת המתנה'])?clean(r['תקופת המתנה'])+' ימים':'לא צוין במאגר – בדקו בתווית','phi')
         +kv('כניסה מחדש',r['כניסה מחדש'])
         +kv('שלב גידול',[clean(r['שלב גידול']),clean(r['גיל גידול'])].filter(Boolean).join(' '))
         +'</div>';
