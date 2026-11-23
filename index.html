@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>תכשירי הדברה לנשירים</title>
+<title>תכשירי הדברה לפי גידול ופגע</title>
 <style>
   :root{--g:#2f6b3a;--g2:#e8f1e9;--bd:#d9dfd9;--tx:#1d241e;--mut:#5d6b60;--warn:#8a5a00;--wbg:#fff6e0;--red:#9b2c2c;--rbg:#fdecec}
   *{box-sizing:border-box}
@@ -45,14 +45,16 @@
 </head>
 <body>
 <header>
-  <h1>תכשירי הדברה לנשירים</h1>
+  <h1>תכשירי הדברה לפי גידול ופגע</h1>
   <div class="src" id="src">מקור: מאגר חומרי הדברה, משרד החקלאות וביטחון המזון · טוען…</div>
 </header>
 <div class="wrap">
   <div class="warn">המידע נמשך ישירות מהמאגר הממשלתי ואינו תחליף לתווית התכשיר. לפני כל שימוש בדקו בתווית את המינון, ימי ההמתנה וההגבלות.</div>
 
   <div class="lbl">1. בחרו גידול</div>
-  <div class="chips" id="crops"></div>
+  <input type="search" id="cq" placeholder="חיפוש גידול, למשל: עגבנייה, הדרים, תפוח">
+  <div class="chips" id="groups" style="margin-top:8px"></div>
+  <div class="chips" id="crops" style="margin-top:10px"></div>
 
   <div id="step2" style="display:none">
     <div class="lbl">2. מה מטפלים?</div>
@@ -73,7 +75,7 @@
 const API = 'https://data.gov.il/api/3/action/';
 const RES_ID = 'cffe0c50-6856-4187-9315-51bc113cb718';      // מאגר חומרי הדברה - כותרות בעברית
 const DATASET_PAGE = 'https://data.gov.il/he/datasets/ministry_of_agriculture/673';
-const CROPS = ['תפוח עץ','אגס','שזיף','משמש','אפרסק','נקטרינה','דובדבן'];
+let GROUPS = new Map();   // קבוצת גידולים -> [גידולים], נשלף מהמאגר
 const CATS = [
   {k:'pests', t:'מזיקים', test:a=>/חרקים|אקריות|משיכת חרקים|חלזונות/.test(a)},
   {k:'dis',   t:'מחלות',  test:a=>/פטריות|חיידקים|מחלות/.test(a)},
@@ -83,7 +85,7 @@ const CATS = [
 const FIELDS = ['שם תכשיר','סוג פעילות','סוג תכשיר','חומר פעיל','קבוצת עמידות','טרגט קוד','ריכוז חומר פעיל','פורמולציה','דרגת רעילות','תווית','גידול','נגע','מינון ליישום','נפח ליישום','כניסה מחדש','תקופת המתנה','שלב גידול','גיל גידול','אופי הפעלה','הערה גידול'];
 
 /* ===== מצב ===== */
-const S = {crop:null, cat:'pests', pest:null, rows:{}, org:false};
+const S = {group:null, crop:null, cat:'pests', pest:null, rows:{}, org:false};
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clean = s => String(s==null?'':s).trim();
@@ -125,17 +127,50 @@ async function loadCrop(crop){
   S.rows[crop]=rows; return rows;
 }
 
+async function loadGroups(){
+  $('groups').innerHTML='<div class="msg">טוען רשימת גידולים מהמאגר…</div>';
+  const out=[]; let offset=0;
+  while(true){
+    const r = await api('datastore_search',{resource_id:RES_ID, fields:['קבוצת גידולים','גידול'], distinct:true, limit:5000, offset, sort:'גידול'});
+    out.push(...r.records); offset+=r.records.length;
+    if(!r.records.length || r.records.length<5000) break;
+  }
+  GROUPS=new Map();
+  for(const x of out){
+    const g=clean(x['קבוצת גידולים'])||'אחר', c=clean(x['גידול']);
+    if(!c) continue;
+    if(!GROUPS.has(g)) GROUPS.set(g,new Set());
+    GROUPS.get(g).add(c);
+  }
+  GROUPS=new Map([...GROUPS.entries()].sort((a,b)=>a[0].localeCompare(b[0],'he')).map(([g,s])=>[g,[...s].sort((a,b)=>a.localeCompare(b,'he'))]));
+}
+
+function cropMatches(){
+  const q=clean($('cq').value);
+  if(q){ const all=[]; GROUPS.forEach(l=>l.forEach(c=>{ if(c.includes(q) && !all.includes(c)) all.push(c); })); return all.sort((a,b)=>a.localeCompare(b,'he')); }
+  return S.group ? (GROUPS.get(S.group)||[]) : [];
+}
+
+function renderGroups(){
+  $('groups').innerHTML=[...GROUPS.entries()].map(([g,l])=>'<button class="chip'+(S.group===g?' on':'')+'" data-g="'+esc(g)+'">'+esc(g)+' <small>('+l.length+')</small></button>').join('');
+  $('groups').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{S.group=b.dataset.g; $('cq').value=''; renderGroups(); renderCrops();});
+}
+
 function renderCrops(){
-  $('crops').innerHTML = CROPS.map(c=>'<button class="chip'+(S.crop===c?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>').join('');
+  const list=cropMatches();
+  if(!list.length){ $('crops').innerHTML = (S.group||clean($('cq').value)) ? '<div class="msg">לא נמצא גידול</div>' : ''; return; }
+  $('crops').innerHTML = list.map(c=>'<button class="chip'+(S.crop===c?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>').join('');
   $('crops').querySelectorAll('.chip').forEach(b=>b.onclick=()=>pickCrop(b.dataset.c));
 }
 
 async function pickCrop(c){
-  S.crop=c; S.pest=null; renderCrops(); $('res').innerHTML='';
+  S.crop=c; S.pest=null; S.cat='pests'; renderCrops(); $('res').innerHTML='';
   try{ localStorage.setItem('hadbara_crop',c);}catch(e){}
   $('step2').style.display='block';
   $('pests').innerHTML='<div class="msg">טוען נתונים מהמאגר…</div>';
-  try{ await loadCrop(c); renderCats(); renderPests(); }
+  try{ await loadCrop(c);
+    const all=S.rows[c]; if(!all.some(x=>x._cat===S.cat)) S.cat=(CATS.find(k=>all.some(x=>x._cat===k.k))||CATS[0]).k;
+    renderCats(); renderPests(); $('step2').scrollIntoView({behavior:'smooth',block:'start'}); }
   catch(e){ $('pests').innerHTML='<div class="msg">לא הצלחתי לטעון מהמאגר הממשלתי ('+esc(e.message)+'). נסו שוב מאוחר יותר.</div>'; }
 }
 
@@ -206,9 +241,16 @@ $('q').addEventListener('input',renderPests);
 $('org').addEventListener('change',e=>{S.org=e.target.checked;S.pest=null;$('res').innerHTML='';renderPests();});
 $('foot').innerHTML='הנתונים נמשכים בכל כניסה מ-<a href="'+DATASET_PAGE+'" target="_blank" rel="noopener">data.gov.il</a>. אין לראות במידע המלצה לשימוש; האחריות על היישום חלה על המשתמש.';
 
-renderCrops(); loadMeta();
-let last=null; try{ last=localStorage.getItem('hadbara_crop'); }catch(e){}
-if(last && CROPS.includes(last)) pickCrop(last);
+$('cq').addEventListener('input',renderCrops);
+loadMeta();
+(async()=>{
+  try{ await loadGroups(); }
+  catch(e){ $('groups').innerHTML='<div class="msg">לא הצלחתי לטעון את רשימת הגידולים מהמאגר ('+esc(e.message)+'). נסו לרענן.</div>'; return; }
+  let last=null; try{ last=localStorage.getItem('hadbara_crop'); }catch(e){}
+  if(last){ for(const [g,l] of GROUPS){ if(l.includes(last)){ S.group=g; break; } } }
+  renderGroups(); renderCrops();
+  if(last && S.group) pickCrop(last);
+})();
 </script>
 </body>
 </html>
