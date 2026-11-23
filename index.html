@@ -131,9 +131,9 @@ async function loadGroups(){
   $('groups').innerHTML='<div class="msg">טוען רשימת גידולים מהמאגר…</div>';
   const out=[]; let offset=0;
   while(true){
-    const r = await api('datastore_search',{resource_id:RES_ID, fields:['קבוצת גידולים','גידול'], distinct:true, limit:5000, offset, sort:'גידול'});
+    const r = await api('datastore_search',{resource_id:RES_ID, fields:['קבוצת גידולים','גידול'], distinct:true, limit:1000, offset, sort:'גידול'});
     out.push(...r.records); offset+=r.records.length;
-    if(!r.records.length || r.records.length<5000) break;
+    if(!r.records.length || offset>20000) break;   // ממשיכים עד דף ריק (השרת עלול להגביל גודל דף)
   }
   GROUPS=new Map();
   for(const x of out){
