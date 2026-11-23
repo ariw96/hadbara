@@ -22,7 +22,8 @@ try {
   for (const r of res.filter(r => !KNOWN.includes(r.id))) {
     problems.push(`הועלה קובץ חדש למאגר: "${r.name}" (מזהה ${r.id}, נוצר ${r.created}). צריך לבדוק אם הוא מחליף את הקובץ הנוכחי ולעדכן את RES_ID ב-index.html`);
   }
-  console.log('קבצים במאגר:', res.map(r => r.name + ' [' + r.id + ']').join(' | '));
+  for (const r of res) console.log(`קובץ: ${r.name} | מזהה ${r.id} | נוצר ${r.created} | עודכן ${r.last_modified}`);
+  console.log('המאגר (dataset) נוצר:', pkg.metadata_created, '| עודכן:', pkg.metadata_modified);
 
   // 2. מתי עודכנו הנתונים
   const meta = await api('resource_show', { id: RES_ID });
