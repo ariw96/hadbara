@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תכשירי הדברה לנשירים</title>
+<style>
+  :root{--g:#2f6b3a;--g2:#e8f1e9;--bd:#d9dfd9;--tx:#1d241e;--mut:#5d6b60;--warn:#8a5a00;--wbg:#fff6e0;--red:#9b2c2c;--rbg:#fdecec}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--tx);background:#f6f8f6;font-size:16px;line-height:1.45}
+  header{background:var(--g);color:#fff;padding:14px 16px 12px}
+  header h1{margin:0;font-size:20px}
+  header .src{font-size:13px;opacity:.9;margin-top:4px}
+  .wrap{max-width:760px;margin:0 auto;padding:12px}
+  .warn{background:var(--wbg);color:var(--warn);border:1px solid #f0d9a0;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+  .lbl{font-weight:600;margin:14px 0 6px;font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--bd);background:#fff;border-radius:999px;padding:8px 14px;font-size:15px;cursor:pointer}
+  .chip.on{background:var(--g);color:#fff;border-color:var(--g)}
+  .chip small{opacity:.75}
+  input[type=search]{width:100%;padding:11px 12px;border:1px solid var(--bd);border-radius:10px;font-size:16px;background:#fff}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:14px;color:var(--mut)}
+  .pests{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:46vh;overflow:auto}
+  .pest{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+  .pest.on{border-color:var(--g);background:var(--g2)}
+  .pest .n{color:var(--mut);font-size:13px;white-space:nowrap}
+  .card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;margin-top:10px}
+  .card h3{margin:0 0 2px;font-size:17px}
+  .ai{color:var(--mut);font-size:13px;direction:ltr;text-align:right}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:8px}
+  .kv{background:#f3f6f3;border-radius:8px;padding:6px 8px}
+  .kv b{display:block;font-size:12px;color:var(--mut);font-weight:500}
+  .kv span{font-size:15px}
+  .kv.phi{background:var(--g2)}
+  .tox-רעיל{background:var(--rbg);color:var(--red)}
+  .note{margin-top:8px;font-size:14px;background:#f8f8f2;border-right:3px solid #c9c38a;padding:6px 8px;border-radius:4px}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px;color:var(--mut);gap:8px;flex-wrap:wrap}
+  a{color:var(--g)}
+  .msg{padding:20px;text-align:center;color:var(--mut)}
+  .back{display:none;margin-top:10px}
+  button.link{background:none;border:0;color:var(--g);font-size:15px;cursor:pointer;padding:0}
+  .sel{font-size:18px;font-weight:700;margin-top:14px}
+  footer{font-size:12px;color:var(--mut);text-align:center;padding:20px 12px 30px}
+</style>
+</head>
+<body>
+<header>
+  <h1>תכשירי הדברה לנשירים</h1>
+  <div class="src" id="src">מקור: מאגר חומרי הדברה, משרד החקלאות וביטחון המזון · טוען…</div>
+</header>
+<div class="wrap">
+  <div class="warn">המידע נמשך ישירות מהמאגר הממשלתי ואינו תחליף לתווית התכשיר. לפני כל שימוש בדקו בתווית את המינון, ימי ההמתנה וההגבלות.</div>
+
+  <div class="lbl">1. בחרו גידול</div>
+  <div class="chips" id="crops"></div>
+
+  <div id="step2" style="display:none">
+    <div class="lbl">2. מה מטפלים?</div>
+    <div class="chips" id="cats"></div>
+    <div class="row"><label><input type="checkbox" id="org"> רק תכשירים אורגניים</label></div>
+
+    <div class="lbl">3. בחרו פגע</div>
+    <input type="search" id="q" placeholder="חיפוש פגע או תכשיר, למשל: זבוב, קימחון, ספרטה">
+    <div class="pests" id="pests"></div>
+  </div>
+
+  <div id="res"></div>
+</div>
+<footer id="foot"></footer>
+
+<script>
+/* ===== הגדרות ===== */
+const API = 'https://data.gov.il/api/3/action/';
+const RES_ID = 'cffe0c50-6856-4187-9315-51bc113cb718';      // מאגר חומרי הדברה - כותרות בעברית
+const DATASET_PAGE = 'https://data.gov.il/he/datasets/ministry_of_agriculture/673';
+const CROPS = ['תפוח עץ','אגס','שזיף','משמש','אפרסק','נקטרינה','דובדבן'];
+const CATS = [
+  {k:'pests', t:'מזיקים', test:a=>/חרקים|אקריות|משיכת חרקים|חלזונות/.test(a)},
+  {k:'dis',   t:'מחלות',  test:a=>/פטריות|חיידקים|מחלות/.test(a)},
+  {k:'weed',  t:'עשבים',  test:a=>/עשבים/.test(a)},
+  {k:'other', t:'אחר',    test:a=>true}
+];
+const FIELDS = ['שם תכשיר','סוג פעילות','סוג תכשיר','חומר פעיל','קבוצת עמידות','טרגט קוד','ריכוז חומר פעיל','פורמולציה','דרגת רעילות','תווית','גידול','נגע','מינון ליישום','נפח ליישום','כניסה מחדש','תקופת המתנה','שלב גידול','גיל גידול','אופי הפעלה','הערה גידול'];
+
+/* ===== מצב ===== */
+const S = {crop:null, cat:'pests', pest:null, rows:{}, org:false};
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clean = s => String(s==null?'':s).trim();
+const catOf = a => (CATS.find(c=>c.k!=='other' && c.test(a))||CATS[3]).k;
+
+async function api(action, body){
+  const r = await fetch(API+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j = await r.json(); if(!j.success) throw new Error('API error');
+  return j.result;
+}
+
+async function loadMeta(){
+  try{
+    const r = await api('resource_show',{id:RES_ID});
+    const d = new Date(r.last_modified || r.metadata_modified);
+    $('src').innerHTML = 'מקור: <a style="color:#fff" href="'+DATASET_PAGE+'" target="_blank" rel="noopener">מאגר חומרי הדברה, משרד החקלאות</a> · המאגר עודכן: '+d.toLocaleDateString('he-IL');
+  }catch(e){
+    $('src').textContent = 'מקור: מאגר חומרי הדברה, משרד החקלאות וביטחון המזון';
+  }
+}
+
+async function loadCrop(crop){
+  if(S.rows[crop]) return S.rows[crop];
+  const out=[]; let offset=0;
+  while(true){
+    const r = await api('datastore_search',{resource_id:RES_ID, filters:{'גידול':crop}, fields:FIELDS, limit:1000, offset});
+    out.push(...r.records); offset+=r.records.length;
+    if(!r.records.length || offset>=r.total) break;
+  }
+  // ניקוי כפילויות זהות
+  const seen=new Set(), rows=[];
+  for(const x of out){
+    const key=[x['שם תכשיר'],x['נגע'],x['מינון ליישום'],x['נפח ליישום'],x['תקופת המתנה'],x['שלב גידול'],x['הערה גידול']].map(clean).join('|');
+    if(seen.has(key)) continue; seen.add(key);
+    x._cat = catOf(clean(x['סוג פעילות']));
+    rows.push(x);
+  }
+  S.rows[crop]=rows; return rows;
+}
+
+function renderCrops(){
+  $('crops').innerHTML = CROPS.map(c=>'<button class="chip'+(S.crop===c?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>').join('');
+  $('crops').querySelectorAll('.chip').forEach(b=>b.onclick=()=>pickCrop(b.dataset.c));
+}
+
+async function pickCrop(c){
+  S.crop=c; S.pest=null; renderCrops(); $('res').innerHTML='';
+  try{ localStorage.setItem('hadbara_crop',c);}catch(e){}
+  $('step2').style.display='block';
+  $('pests').innerHTML='<div class="msg">טוען נתונים מהמאגר…</div>';
+  try{ await loadCrop(c); renderCats(); renderPests(); }
+  catch(e){ $('pests').innerHTML='<div class="msg">לא הצלחתי לטעון מהמאגר הממשלתי ('+esc(e.message)+'). נסו שוב מאוחר יותר.</div>'; }
+}
+
+function current(){
+  return (S.rows[S.crop]||[]).filter(x=>x._cat===S.cat && (!S.org || /אורגני/.test(clean(x['סוג תכשיר']))));
+}
+
+function renderCats(){
+  const all=S.rows[S.crop]||[];
+  $('cats').innerHTML = CATS.map(c=>{
+    const n=all.filter(x=>x._cat===c.k).length;
+    return n? '<button class="chip'+(S.cat===c.k?' on':'')+'" data-k="'+c.k+'">'+c.t+' <small>('+n+')</small></button>' : '';
+  }).join('');
+  $('cats').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.k;S.pest=null;$('res').innerHTML='';renderCats();renderPests();});
+}
+
+function renderPests(){
+  const q=clean($('q').value);
+  const rows=current();
+  const map=new Map();
+  for(const x of rows){
+    const p=clean(x['נגע'])||'(ללא פגע מוגדר)';
+    if(q && !p.includes(q) && !clean(x['שם תכשיר']).includes(q) && !clean(x['חומר פעיל']).toLowerCase().includes(q.toLowerCase())) continue;
+    if(!map.has(p)) map.set(p,new Set());
+    map.get(p).add(clean(x['שם תכשיר']));
+  }
+  const list=[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'he'));
+  if(!list.length){ $('pests').innerHTML='<div class="msg">לא נמצאו פגעים</div>'; return; }
+  $('pests').innerHTML=list.map(([p,s])=>'<div class="pest'+(S.pest===p?' on':'')+'" data-p="'+esc(p)+'"><span>'+esc(p)+'</span><span class="n">'+s.size+' תכשירים</span></div>').join('');
+  $('pests').querySelectorAll('.pest').forEach(d=>d.onclick=()=>{S.pest=d.dataset.p;renderPests();renderResults();});
+}
+
+function kv(label,val,cls){ val=clean(val); return val? '<div class="kv '+(cls||'')+'"><b>'+label+'</b><span>'+esc(val)+'</span></div>' : ''; }
+function phiNum(x){ const n=parseFloat(clean(x['תקופת המתנה'])); return isNaN(n)?999:n; }
+
+function renderResults(){
+  const rows=current().filter(x=>(clean(x['נגע'])||'(ללא פגע מוגדר)')===S.pest);
+  // איחוד שורות של אותו תכשיר
+  const by=new Map();
+  for(const x of rows){ const k=clean(x['שם תכשיר']); if(!by.has(k)) by.set(k,[]); by.get(k).push(x); }
+  const items=[...by.entries()].sort((a,b)=>Math.min(...a[1].map(phiNum))-Math.min(...b[1].map(phiNum)));
+  let h='<div class="sel">'+esc(S.crop)+' · '+esc(S.pest)+'</div><div class="row">'+items.length+' תכשירים · ממוין לפי ימי המתנה (הקצר ראשון)</div>';
+  for(const [name,rs] of items){
+    const x=rs[0];
+    const ai=[clean(x['חומר פעיל']),clean(x['ריכוז חומר פעיל'])].filter(Boolean).join(' · ');
+    const tox=clean(x['דרגת רעילות']);
+    const grp=clean(x['טרגט קוד'])||'';
+    h+='<div class="card"><h3>'+esc(name)+'</h3><div class="ai">'+esc(ai)+'</div>';
+    for(const r of rs){
+      h+='<div class="grid">'
+        +kv('מינון',r['מינון ליישום'])
+        +kv('נפח',r['נפח ליישום'])
+        +kv('ימי המתנה',clean(r['תקופת המתנה'])?clean(r['תקופת המתנה'])+' ימים':'','phi')
+        +kv('כניסה מחדש',r['כניסה מחדש'])
+        +kv('שלב גידול',[clean(r['שלב גידול']),clean(r['גיל גידול'])].filter(Boolean).join(' '))
+        +'</div>';
+      if(clean(r['הערה גידול'])) h+='<div class="note">'+esc(r['הערה גידול'])+'</div>';
+    }
+    h+='<div class="grid">'+kv('פורמולציה',x['פורמולציה'])+kv('רעילות',tox,'tox-'+tox)+kv('קוד קבוצת עמידות',grp)+kv('סוג',x['סוג תכשיר'])+'</div>';
+    const lab=clean(x['תווית']);
+    h+='<div class="foot"><span>'+esc(clean(x['קבוצת עמידות']).slice(0,80))+'</span>'+(/^https?:/.test(lab)?'<a href="'+esc(lab)+'" target="_blank" rel="noopener">לתווית התכשיר ←</a>':'')+'</div></div>';
+  }
+  $('res').innerHTML=h;
+  $('res').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+$('q').addEventListener('input',renderPests);
+$('org').addEventListener('change',e=>{S.org=e.target.checked;S.pest=null;$('res').innerHTML='';renderPests();});
+$('foot').innerHTML='הנתונים נמשכים בכל כניסה מ-<a href="'+DATASET_PAGE+'" target="_blank" rel="noopener">data.gov.il</a>. אין לראות במידע המלצה לשימוש; האחריות על היישום חלה על המשתמש.';
+
+renderCrops(); loadMeta();
+let last=null; try{ last=localStorage.getItem('hadbara_crop'); }catch(e){}
+if(last && CROPS.includes(last)) pickCrop(last);
+</script>
+</body>
+</html>
