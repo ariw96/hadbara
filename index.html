@@ -40,6 +40,10 @@
   .back{display:none;margin-top:10px}
   button.link{background:none;border:0;color:var(--g);font-size:15px;cursor:pointer;padding:0}
   .sel{font-size:18px;font-weight:700;margin-top:14px}
+  .share{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .btn{border:1px solid var(--g);background:#fff;color:var(--g);border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;text-decoration:none}
+  .btn.wa{background:#25D366;border-color:#25D366;color:#fff}
+  #shMsg{font-size:13px;color:var(--mut);word-break:break-all}
   footer{font-size:12px;color:var(--mut);text-align:center;padding:20px 12px 30px}
 </style>
 </head>
@@ -191,14 +195,30 @@ function renderCrops(){
   $('crops').querySelectorAll('.chip').forEach(b=>b.onclick=()=>pickCrop(b.dataset.c));
 }
 
-async function pickCrop(c){
+function setUrl(){
+  try{
+    const u=new URLSearchParams();
+    if(S.crop) u.set('crop',S.crop);
+    if(S.crop && S.cat) u.set('cat',S.cat);
+    if(S.pest) u.set('pest',S.pest);
+    const qs=u.toString();
+    history.replaceState(null,'',location.pathname+(qs?'?'+qs:''));
+  }catch(e){}
+}
+
+async function pickCrop(c, opt){
+  opt=opt||{};
   S.crop=c; S.pest=null; S.cat='pests'; renderCrops(); $('res').innerHTML='';
   try{ localStorage.setItem('hadbara_crop',c);}catch(e){}
   $('step2').style.display='block';
   $('pests').innerHTML='<div class="msg">טוען נתונים מהמאגר…</div>';
   try{ await loadCrop(c);
-    const all=S.rows[c]; if(!all.some(x=>x._cat===S.cat)) S.cat=(CATS.find(k=>all.some(x=>x._cat===k.k))||CATS[0]).k;
-    renderCats(); renderPests(); $('step2').scrollIntoView({behavior:'smooth',block:'start'}); }
+    const all=S.rows[c];
+    if(opt.cat && all.some(x=>x._cat===opt.cat)) S.cat=opt.cat;
+    if(!all.some(x=>x._cat===S.cat)) S.cat=(CATS.find(k=>all.some(x=>x._cat===k.k))||CATS[0]).k;
+    renderCats(); renderPests(); setUrl();
+    if(opt.pest && current().some(x=>(clean(x['נגע'])||'(ללא פגע מוגדר)')===opt.pest)){ S.pest=opt.pest; renderPests(); renderResults(); }
+    else $('step2').scrollIntoView({behavior:'smooth',block:'start'}); }
   catch(e){ $('pests').innerHTML='<div class="msg">לא הצלחתי לטעון מהמאגר הממשלתי ('+esc(e.message)+'). נסו שוב מאוחר יותר.</div>'; }
 }
 
@@ -212,7 +232,7 @@ function renderCats(){
     const n=all.filter(x=>x._cat===c.k).length;
     return n? '<button class="chip'+(S.cat===c.k?' on':'')+'" data-k="'+c.k+'">'+c.t+' <small>('+n+')</small></button>' : '';
   }).join('');
-  $('cats').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.k;S.pest=null;$('res').innerHTML='';renderCats();renderPests();});
+  $('cats').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.k;S.pest=null;$('res').innerHTML='';renderCats();renderPests();setUrl();});
 }
 
 function renderPests(){
@@ -228,7 +248,7 @@ function renderPests(){
   const list=[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'he'));
   if(!list.length){ $('pests').innerHTML='<div class="msg">לא נמצאו פגעים</div>'; return; }
   $('pests').innerHTML=list.map(([p,s])=>'<div class="pest'+(S.pest===p?' on':'')+'" data-p="'+esc(p)+'"><span>'+esc(p)+'</span><span class="n">'+s.size+' תכשירים</span></div>').join('');
-  $('pests').querySelectorAll('.pest').forEach(d=>d.onclick=()=>{S.pest=d.dataset.p;renderPests();renderResults();});
+  $('pests').querySelectorAll('.pest').forEach(d=>d.onclick=()=>{S.pest=d.dataset.p;renderPests();renderResults();setUrl();});
 }
 
 function kv(label,val,cls){ val=clean(val); return val? '<div class="kv '+(cls||'')+'"><b>'+label+'</b><span>'+esc(val)+'</span></div>' : ''; }
@@ -240,7 +260,8 @@ function renderResults(){
   const by=new Map();
   for(const x of rows){ const k=clean(x['שם תכשיר']); if(!by.has(k)) by.set(k,[]); by.get(k).push(x); }
   const items=[...by.entries()].sort((a,b)=>Math.min(...a[1].map(phiNum))-Math.min(...b[1].map(phiNum)));
-  let h='<div class="sel">'+esc(S.crop)+' · '+esc(S.pest)+'</div><div class="row">'+items.length+' תכשירים · ממוין לפי ימי המתנה (הקצר ראשון)</div>';
+  let h='<div class="sel">'+esc(S.crop)+' · '+esc(S.pest)+'</div><div class="row">'+items.length+' תכשירים · ממוין לפי ימי המתנה (הקצר ראשון)</div>'
+    +'<div class="share"><a class="btn wa" id="shWa" href="#" target="_blank" rel="noopener">שיתוף בווטסאפ</a><button class="btn" id="shCp">העתקת קישור</button><span id="shMsg"></span></div>';
   for(const [name,rs] of items){
     const x=rs[0];
     const ai=[clean(x['חומר פעיל']),clean(x['ריכוז חומר פעיל'])].filter(Boolean).join(' · ');
@@ -262,11 +283,15 @@ function renderResults(){
     h+='<div class="foot"><span>'+esc(clean(x['קבוצת עמידות']).slice(0,80))+'</span>'+(/^https?:/.test(lab)?'<a href="'+esc(lab)+'" target="_blank" rel="noopener">לתווית התכשיר ←</a>':'')+'</div></div>';
   }
   $('res').innerHTML=h;
+  setUrl();
+  const link=location.href, txt=S.crop+' · '+S.pest+' – תכשירי הדברה מורשים: '+link;
+  $('shWa').href='https://wa.me/?text='+encodeURIComponent(txt);
+  $('shCp').onclick=async()=>{ try{ await navigator.clipboard.writeText(link); $('shMsg').textContent='הקישור הועתק'; }catch(e){ $('shMsg').textContent=link; } };
   $('res').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 $('q').addEventListener('input',renderPests);
-$('org').addEventListener('change',e=>{S.org=e.target.checked;S.pest=null;$('res').innerHTML='';renderPests();});
+$('org').addEventListener('change',e=>{S.org=e.target.checked;S.pest=null;$('res').innerHTML='';renderPests();setUrl();});
 $('foot').innerHTML='הנתונים נמשכים בכל כניסה מ-<a href="'+DATASET_PAGE+'" target="_blank" rel="noopener">data.gov.il</a>. אין לראות במידע המלצה לשימוש; האחריות על היישום חלה על המשתמש.';
 
 $('cq').addEventListener('input',renderCrops);
@@ -274,10 +299,11 @@ const META = loadMeta();
 (async()=>{
   try{ await loadGroups(); }
   catch(e){ $('groups').innerHTML='<div class="msg">לא הצלחתי לטעון את רשימת הגידולים מהמאגר ('+esc(e.message)+'). נסו לרענן.</div>'; return; }
-  let last=null; try{ last=localStorage.getItem('hadbara_crop'); }catch(e){}
+  let P={}; try{ const u=new URLSearchParams(location.search); P={crop:u.get('crop'),cat:u.get('cat'),pest:u.get('pest')}; }catch(e){}
+  let last=P.crop; if(!last){ try{ last=localStorage.getItem('hadbara_crop'); }catch(e){} }
   if(last){ for(const [g,l] of GROUPS){ if(l.includes(last)){ S.group=g; break; } } }
   renderGroups(); renderCrops();
-  if(last && S.group) pickCrop(last);
+  if(last && S.group) pickCrop(last, P.crop===last ? {cat:P.cat, pest:P.pest} : {});
 })();
 </script>
 </body>
